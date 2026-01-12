@@ -1,4 +1,4 @@
-export const URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+export const URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export const API_KEY = "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";
+export const API_KEY =
+  "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";

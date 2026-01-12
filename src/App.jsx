@@ -1,23 +1,31 @@
 import { useState } from "react";
-import { API_KEY } from "./constants.js";
+import { URL, API_KEY } from "./constants.js";
+import Answer from "./Answer.jsx";
 
 function App() {
   const [question, setQuestion] = useState("");
-  const [isclicked, setIsClicked] = useState(false);
-  const [response, setResponse] = useState(null);
+  const [isClicked, setIsClicked] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
-  const handleask = async () => {
+  const handleAsk = async () => {
     if (!question.trim() || loading) return;
 
+    const currentQuestion = question;
+    setQuestion("");
     setIsClicked(true);
     setLoading(true);
-    setError(null);
-    setResponse(null);
+    setErr(null);
+
+    // Add question to chat history
+    setChatHistory((prev) => [
+      ...prev,
+      { type: "question", content: currentQuestion },
+    ]);
 
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const res = await fetch(URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -28,7 +36,7 @@ function App() {
           messages: [
             {
               role: "user",
-              content: question,
+              content: currentQuestion,
             },
           ],
         }),
@@ -40,45 +48,71 @@ function App() {
       }
 
       const data = await res.json();
-      setResponse(data.choices?.[0]?.message?.content || "No response");
+      let dataString = data.choices[0].message.content;
+      dataString = dataString.split("* ");
+      dataString = dataString.map((item) => item.trim());
+
+      // Add answer to chat history
+      setChatHistory((prev) => [
+        ...prev,
+        { type: "answer", content: dataString || "No response" },
+      ]);
     } catch (err) {
       console.error("Error fetching response:", err);
-      setError(err?.message || "Failed to get response");
+      setErr(err?.message || "Failed to get response");
+      setChatHistory((prev) => [
+        ...prev,
+        { type: "error", content: err?.message || "Failed to get response" },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleask();
-    }
-  };
-
   return (
     <div className="grid grid-cols-5 h-screen">
+      {/* Sidebar */}
       <div className="col-span-1 bg-zinc-800 text-white p-4"></div>
-      <div className="col-span-4 text-white p-4 flex justify-center items-center flex-col gap-4">
-        <div className="flex items-center mb-4">
-          <h1 className={`${isclicked ? "hidden" : ""} text-2xl font-bold`}>
-            AI Chatbot
-          </h1>
+
+      {/* Main Content */}
+      <div className="col-span-4 text-white p-4 flex flex-col">
+        <div className="flex-1 overflow-y-auto mb-20">
+          {!isClicked && (
+            <div className="flex items-center justify-center h-full">
+              <h1 className="text-2xl font-bold">AI Chatbot</h1>
+            </div>
+          )}
+
+          {isClicked && (
+            <div className="flex flex-col justify-center max-w-3xl mx-auto">
+              {chatHistory.map((item, index) => (
+                <div key={index}>
+                  {item.type === "question" && (
+                    <div className="flex justify-end">
+                      <div className="bg-zinc-600 px-4 py-2 rounded-2xl max-w-2xl mt-5">
+                        <p className="text-white">{item.content}</p>
+                      </div>
+                    </div>
+                  )}
+                  {item.type === "answer" && (
+                    <Answer response={item.content} err={null} />
+                  )}
+                  {item.type === "error" && (
+                    <Answer response={null} err={item.content} />
+                  )}
+                </div>
+              ))}
+              {loading && <div className="text-gray-400">Thinking...</div>}
+            </div>
+          )}
         </div>
 
-        {isclicked && (response || error) && (
-          <div className="bg-zinc-700 p-4 rounded-2xl shadow-zinc-700 shadow-lg border border-zinc-600 w-2/4 max-h-64 overflow-y-auto">
-            {error && <p className="text-red-400">{error}</p>}
-            {response && (
-              <p className="text-white whitespace-pre-wrap">{response}</p>
-            )}
-          </div>
-        )}
-
         <div
-          className={`flex ${
-            isclicked ? "absolute bottom-24" : ""
-          } bg-zinc-700 p-4 rounded-2xl w-2/4 justify-between items-center mx-auto shadow-zinc-700 shadow-lg border border-zinc-600`}
+          className={` ${
+            isClicked
+              ? "fixed bottom-6 ml-66"
+              : ""
+          } flex bg-zinc-700 p-4 rounded-2xl w-2/4 mx-auto shadow-lg border border-zinc-600`}
         >
           <input
             type="text"
@@ -86,12 +120,12 @@ function App() {
             className="ml-4 text-xl outline-0 bg-transparent text-white placeholder-gray-400 flex-1"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={(e) => e.key === "Enter" && handleAsk()}
             disabled={loading}
           />
           <button
             type="button"
-            onClick={handleask}
+            onClick={handleAsk}
             className="bg-zinc-600 text-white px-4 py-2 rounded-2xl mr-1 disabled:opacity-50"
             disabled={loading || !question.trim()}
           >
